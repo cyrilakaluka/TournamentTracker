@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace TrackerLibrary.Models
@@ -9,6 +10,11 @@ namespace TrackerLibrary.Models
     /// </summary>
     public class TournamentModel
     {
+        /// <summary>
+        /// Unique Identification for each model
+        /// </summary>
+        public int Id { get; set; }
+
         /// <summary>
         /// Name of the tournament
         /// </summary>

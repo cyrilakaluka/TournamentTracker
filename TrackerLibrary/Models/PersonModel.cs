@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Runtime.Remoting.Messaging;
 using System.Text;
 
 namespace TrackerLibrary.Models
@@ -9,6 +10,12 @@ namespace TrackerLibrary.Models
     /// </summary>
     public class PersonModel
     {
+
+        /// <summary>
+        /// Unique Identification for each model
+        /// </summary>
+        public int Id { get; set; }
+
         /// <summary>
         /// First name of the person
         /// </summary>
@@ -28,5 +35,10 @@ namespace TrackerLibrary.Models
         /// Phone number of the person
         /// </summary>
         public string CellphoneNumber { get; set; }
+
+        /// <summary>
+        /// Combination of FirstName and LastName of a Person
+        /// </summary>
+        public string FullName => $"{FirstName} {LastName}";
     }
 }

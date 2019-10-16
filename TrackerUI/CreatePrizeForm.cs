@@ -15,6 +15,9 @@ namespace TrackerUI
 {
     public partial class CreatePrizeForm : Form
     {
+        public delegate void PrizeCreatedEventHandler(PrizeModel model);
+        public event PrizeCreatedEventHandler PrizeCreated;
+
         public CreatePrizeForm()
         {
             InitializeComponent();
@@ -32,6 +35,8 @@ namespace TrackerUI
 
                 GlobalConfig.Connection.CreatePrize(model);
 
+                PrizeCreated?.Invoke(model);
+
                 placeNameValue.Text = "";
                 placeNumberValue.Text = "";
                 prizeAmountValue.Text = "0";
@@ -42,6 +47,7 @@ namespace TrackerUI
                 MessageBox.Show("This form has invalid information. Please check it and try again");
             }
         }
+
 
         private bool ValidateForm()
         {
