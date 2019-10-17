@@ -128,13 +128,22 @@ namespace TrackerLibrary.DataAccess
 
             void SaveTournamentRounds(IDbConnection dbConnection)
             {
-                foreach (List<MatchupModel> round in model.Rounds)
+                foreach (RoundModel round in model.Rounds)
                 {
-                    foreach (MatchupModel matchup in round)
+                    var p = new DynamicParameters();
+                    p.Add("@TournamentId", model.Id);
+                    p.Add("@Number", round.Number);
+                    p.Add("@Active", round.Active);
+                    p.Add("@id", 0, dbType: DbType.Int32, direction: ParameterDirection.Output);
+
+                    dbConnection.Execute("dbo.spRounds_Insert", p, commandType: CommandType.StoredProcedure);
+
+                    round.Id = p.Get<int>("@id");
+
+                    foreach (MatchupModel matchup in round.Matchups)
                     {
-                        var p = new DynamicParameters();
-                        p.Add("@TournamentId", model.Id);
-                        p.Add("@MatchupRound", matchup.MatchupRound);
+                        p = new DynamicParameters();
+                        p.Add("@RoundId", round.Id);
                         p.Add("@WinnerId", matchup.Winner?.Id);
                         p.Add("@id", 0, dbType: DbType.Int32, direction: ParameterDirection.Output);
 
@@ -166,23 +175,39 @@ namespace TrackerLibrary.DataAccess
                 p.Add("@WinnerId", model.Winner?.Id);
 
                 dbConnection.Execute("dbo.spMatchups_Update", p, commandType: CommandType.StoredProcedure);
+            }
 
-                //spMatchupEntries_Update
-                foreach (MatchupEntryModel entry in model.Entries)
+            model.Entries.ForEach(UpdateMatchupEntry);
+        }
+
+        public void UpdateMatchupEntry(MatchupEntryModel model)
+        {
+            using (IDbConnection dbConnection = new System.Data.SqlClient.SqlConnection(GlobalConfig.GetConnectionString(ConnectionDatabase)))
+            {
+                if (model.TeamCompeting != null)
                 {
-                    if (entry.TeamCompeting != null)
+                    var p = new DynamicParameters();
+                    p.Add("@id", model.Id);
+                    p.Add("@TeamCompetingId", model.TeamCompeting.Id);
+                    if (model.Score.HasValue)
                     {
-                        p = new DynamicParameters();
-                        p.Add("@id", entry.Id);
-                        p.Add("@TeamCompetingId", entry.TeamCompeting.Id);
-                        if (entry.Score.HasValue)
-                        {
-                            p.Add("@Score", entry.Score);
-                        }
-
-                        dbConnection.Execute("dbo.spMatchupEntries_Update", p, commandType: CommandType.StoredProcedure); 
+                        p.Add("@Score", model.Score);
                     }
+
+                    dbConnection.Execute("dbo.spMatchupEntries_Update", p, commandType: CommandType.StoredProcedure); 
                 }
+            }
+        }
+
+        public void UpdateRound(RoundModel model)
+        {
+            using (IDbConnection dbConnection = new System.Data.SqlClient.SqlConnection(GlobalConfig.GetConnectionString(ConnectionDatabase)))
+            {
+                var p = new DynamicParameters();
+                p.Add("@id", model.Id);
+                p.Add("@Active", model.Active ?? null);
+
+                dbConnection.Execute("dbo.spRounds_Update", p, commandType: CommandType.StoredProcedure);
             }
         }
 
@@ -218,11 +243,7 @@ namespace TrackerLibrary.DataAccess
                     tournament.EnteredTeams = dbConnection.Query<TeamModel>("dbo.spTeam_GetByTournament", p, commandType: CommandType.StoredProcedure).ToList();
 
                     // Populate the rounds
-                    List<MatchupModel> matchups = dbConnection.Query<MatchupModel>("dbo.spMatchups_GetByTournament", p, commandType: CommandType.StoredProcedure).ToList();
-
-                    matchups.GroupBy(x => x.MatchupRound)
-                        .ToList()
-                        .ForEach(group => tournament.Rounds.Add(group.AsList()));
+                    tournament.Rounds = dbConnection.Query<RoundModel>("dbo.spRounds_GetByTournament", p, commandType: CommandType.StoredProcedure).ToList();
 
                     foreach (TeamModel team in tournament.EnteredTeams)
                     {
@@ -232,38 +253,49 @@ namespace TrackerLibrary.DataAccess
                         team.TeamMembers = dbConnection.Query<PersonModel>("dbo.spTeamMembers_GetByTeam", p, commandType: CommandType.StoredProcedure).ToList();
                     }
 
-                    foreach (MatchupModel matchup in matchups)
+                    RoundModel previousRound = tournament.Rounds.FirstOrDefault();
+
+                    foreach (RoundModel currentRound in tournament.Rounds)
                     {
-                        if (matchup.WinnerId.HasValue)
-                        {
-                            matchup.Winner = tournament.EnteredTeams.Find(t => t.Id == matchup.WinnerId);
-                        }
-
                         p = new DynamicParameters();
-                        p.Add("@MatchupId", matchup.Id);
+                        p.Add("@RoundId", currentRound.Id);
 
-                        matchup.Entries = dbConnection.Query<MatchupEntryModel>("dbo.spMatchupEntries_GetByMatchup", p, commandType: CommandType.StoredProcedure).ToList();
+                        currentRound.Matchups = dbConnection.Query<MatchupModel>("dbo.spMatchups_GetByRound", p, commandType: CommandType.StoredProcedure).ToList();
 
-                        foreach (var entry in matchup.Entries)
+                        foreach (MatchupModel matchup in currentRound.Matchups)
                         {
-                            if (entry.TeamCompetingId.HasValue)
+                            matchup.MatchupRound = currentRound.Number;
+
+                            if (matchup.WinnerId.HasValue)
                             {
-                                entry.TeamCompeting = tournament.EnteredTeams.First(tm => tm.Id == entry.TeamCompetingId);
+                                matchup.Winner = tournament.EnteredTeams.Find(t => t.Id == matchup.WinnerId);
                             }
 
-                            if (entry.ParentMatchupId.HasValue)
+                            p = new DynamicParameters();
+                            p.Add("@MatchupId", matchup.Id);
+
+                            matchup.Entries = dbConnection.Query<MatchupEntryModel>("dbo.spMatchupEntries_GetByMatchup", p, commandType: CommandType.StoredProcedure).ToList();
+
+                            foreach (var entry in matchup.Entries)
                             {
-                                entry.ParentMatchup = matchups.First(m => m.Id == entry.ParentMatchupId);
+                                if (entry.TeamCompetingId.HasValue)
+                                {
+                                    entry.TeamCompeting = tournament.EnteredTeams.First(t => t.Id == entry.TeamCompetingId);
+                                }
+
+                                if (entry.ParentMatchupId.HasValue)
+                                {
+                                    entry.ParentMatchup = previousRound?.Matchups.First(m => m.Id == entry.ParentMatchupId);
+                                }
                             }
                         }
+                        previousRound = currentRound;
                     }
-
                 }
             }
 
             return output;
         }
-
 
         public List<TeamModel> GetTeam_All()
         {

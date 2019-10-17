@@ -92,9 +92,19 @@ namespace TrackerLibrary.DataAccess
             tournaments.SaveToTournamentsFile();
         }
 
+        public void UpdateRound(RoundModel model)
+        {
+            model.UpdateRoundToFile();
+        }
+
         public void UpdateMatchup(MatchupModel model)
         {
             model.UpdateMatchupToFile();
+        }
+
+        public void UpdateMatchupEntry(MatchupEntryModel model)
+        {
+            model.UpdateMatchupEntryToFile();
         }
 
         public List<PersonModel> GetPerson_All()

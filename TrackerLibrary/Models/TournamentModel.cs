@@ -38,6 +38,6 @@ namespace TrackerLibrary.Models
         /// <summary>
         /// List of rounds that make up the tournament
         /// </summary>
-        public List<List<MatchupModel>> Rounds { get; set; } = new List<List<MatchupModel>>();
+        public List<RoundModel> Rounds { get; set; } = new List<RoundModel>();
     }
 }

@@ -21,6 +21,7 @@ namespace TrackerLibrary
 
             CreateOtherRounds(model, rounds);
 
+            #region Local Functions
             int FindNumberOfRounds(int teamCount)
             {
                 int powerIndex = 0;
@@ -41,11 +42,17 @@ namespace TrackerLibrary
             List<TeamModel> RandomizeTeamOrder(List<TeamModel> teams)
             {
                 return teams.OrderBy(x => Guid.NewGuid()).ToList();
-            }
+            } 
+            #endregion
         }
 
-        public static void UpdateTournamentResults(this TournamentModel tournament, MatchupModel matchup, int round)
+        public static void UpdateMatchupResults(this MatchupModel matchup, double scoreTeamOne, double scoreTeamTwo)
         {
+            if (matchup.Entries.Count == 1)
+            {
+                return;
+            }
+
             bool parseValid = bool.TryParse(ConfigurationManager.AppSettings["greaterWins"], out bool greaterWins);
 
             if (!parseValid)
@@ -53,49 +60,45 @@ namespace TrackerLibrary
                 greaterWins = true;
             }
 
-            UpdateWinner(matchup, greaterWins);
+            UpdateWinner(matchup, greaterWins, scoreTeamOne, scoreTeamTwo);
 
             GlobalConfig.Connection.UpdateMatchup(matchup);
-
-            UpdateMatchupEntryTeamCompeting(tournament.Rounds[round], matchup);
-
-            if (round == 1)
-            {
-                CheckFirstRoundCompleteAndUpdateByes(tournament);
-            }
         }
 
-        private static void CreateOtherRounds(TournamentModel model, int rounds)
+        private static void CreateOtherRounds(TournamentModel model, int numRounds)
         {
-            int round = 2;
-            List<MatchupModel> previousRound = model.Rounds[0];
-            List<MatchupModel> currentRound = new List<MatchupModel>();
+            RoundModel previousRound = model.Rounds[0];
+            RoundModel currentRound = new RoundModel(){ Number = 2, Active = null };
             MatchupModel matchup = new MatchupModel();
 
-            while (round <= rounds)
+            while (currentRound.Number <= numRounds)
             {
-                foreach (MatchupModel m in previousRound)
+                foreach (MatchupModel m in previousRound.Matchups)
                 {
                     matchup.Entries.Add(new MatchupEntryModel{ ParentMatchup = m });
 
                     if (matchup.Entries.Count > 1)
                     {
-                        matchup.MatchupRound = round;
-                        currentRound.Add(matchup);
+                        matchup.MatchupRound = currentRound.Number;
+                        currentRound.Matchups.Add(matchup);
                         matchup = new MatchupModel();
                     }
                 }
 
                 model.Rounds.Add(currentRound);
                 previousRound = currentRound;
-                currentRound = new List<MatchupModel>();
-                round++;
+                currentRound = new RoundModel(){ Number = previousRound.Number + 1, Active = null };
             }
         }
 
-        private static List<MatchupModel> CreateFirstRound(int numberOfByes, List<TeamModel> teams)
+        private static RoundModel CreateFirstRound(int numberOfByes, List<TeamModel> teams)
         {
-            List<MatchupModel> output = new List<MatchupModel>();
+            RoundModel output = new RoundModel()
+            {
+                Number = 1,
+                Active = true
+            };
+            List<MatchupModel> matchups = new List<MatchupModel>();
             var matchup = new MatchupModel();
 
             foreach (TeamModel team in teams)
@@ -110,7 +113,7 @@ namespace TrackerLibrary
                         numberOfByes--;
                     }
                     matchup.MatchupRound = 1;
-                    output.Add(matchup);
+                    output.Matchups.Add(matchup);
                     matchup = new MatchupModel();
                 }
             }
@@ -118,15 +121,15 @@ namespace TrackerLibrary
             return output;
         }
 
-        private static void UpdateWinner(MatchupModel matchup, bool greaterWins)
+        private static void UpdateWinner(MatchupModel matchup, bool greaterWins, double scoreTeamOne, double scoreTeamTwo)
         {
             if (greaterWins)
             {
-                if (matchup.Entries[0].Score > matchup.Entries[1].Score)
+                if (scoreTeamOne > scoreTeamTwo)
                 {
                     matchup.Winner = matchup.Entries[0].TeamCompeting;
                 }
-                else if (matchup.Entries[1].Score > matchup.Entries[0].Score)
+                else if (scoreTeamTwo > scoreTeamOne)
                 {
                     matchup.Winner = matchup.Entries[1].TeamCompeting;
                 }
@@ -137,11 +140,11 @@ namespace TrackerLibrary
             }
             else
             {
-                if (matchup.Entries[0].Score < matchup.Entries[1].Score)
+                if (scoreTeamOne < scoreTeamTwo)
                 {
                     matchup.Winner = matchup.Entries[0].TeamCompeting;
                 }
-                else if (matchup.Entries[1].Score < matchup.Entries[0].Score)
+                else if (scoreTeamTwo < scoreTeamOne)
                 {
                     matchup.Winner = matchup.Entries[1].TeamCompeting;
                 }
@@ -150,50 +153,39 @@ namespace TrackerLibrary
                     throw new Exception("No ties are allowed");
                 }
             }
+
+            matchup.Entries[0].Score = scoreTeamOne;
+            matchup.Entries[1].Score = scoreTeamTwo;
         }
 
-        private static void CheckFirstRoundCompleteAndUpdateByes(TournamentModel tournament)
+        public static void UpdateTournamentRound(this TournamentModel tournament, RoundModel round)
         {
-            bool scoringComplete = tournament.Rounds[0].Count(x => x.Winner == null) == 0;
+            bool roundCompleted = round.Matchups.All(m => m.Winner != null);
 
-            if (scoringComplete)
+            if (!roundCompleted)
             {
-                foreach (var m in tournament.Rounds[1])
-                {
-                    foreach (var entry in m.Entries)
-                    {
-                        if (entry.TeamCompeting == null)
-                        {
-                            entry.TeamCompeting = entry.ParentMatchup.Winner;
-                        }
-                    }
-                }
+                throw new Exception("Winners have not been assigned to matchups in this round");
             }
-        }
 
-        private static void UpdateMatchupEntryTeamCompeting(List<MatchupModel> roundMatchups, MatchupModel matchup)
-        {
-            foreach (MatchupModel m in roundMatchups)
+            round.Active = false;
+
+            GlobalConfig.Connection.UpdateRound(round);
+
+            bool finalRound = tournament.Rounds.Count == round.Number;
+
+            if (!finalRound)
             {
-                foreach (MatchupEntryModel me in m.Entries)
+                RoundModel nextRound = tournament.Rounds.First(r => r.Number == round.Number + 1);
+
+                nextRound.Active = true;
+
+                nextRound.Matchups.ForEach(m => m.Entries.ForEach(me =>
                 {
-                    if (me.ParentMatchup?.Id == matchup.Id)
-                    {
-                        me.TeamCompeting = matchup.Winner;
-                        GlobalConfig.Connection.UpdateMatchup(m);
-                        var otherEntry = m.Entries.Find(x => x.Id != me.Id);
+                    me.TeamCompeting = me.ParentMatchup.Winner;
+                    GlobalConfig.Connection.UpdateMatchupEntry(me);
+                }));
 
-                        if (!(otherEntry?.ParentMatchup?.Entries.Count > 1))
-                        {
-                            if (otherEntry?.ParentMatchup != null)
-                            {
-                                otherEntry.TeamCompeting = otherEntry.ParentMatchup.Entries[0].TeamCompeting;
-                            }
-                        }
-
-                        return;
-                    }
-                }
+                GlobalConfig.Connection.UpdateRound(nextRound);
             }
         }
     }

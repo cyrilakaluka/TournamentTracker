@@ -12,6 +12,7 @@ namespace TrackerLibrary
         public const string PersonsFile = "PersonModels.csv";
         public const string TeamsFile = "TeamModels.csv";
         public const string TournamentsFile = "TournamentModels.csv";
+        public const string RoundsFile = "RoundModels.csv";
         public const string MatchupsFile = "MatchupModels.csv";
         public const string MatchupEntriesFile = "MatchupEntryModels.csv";
 

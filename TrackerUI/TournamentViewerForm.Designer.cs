@@ -42,6 +42,7 @@
             this.teamTwoName = new System.Windows.Forms.Label();
             this.versusLabel = new System.Windows.Forms.Label();
             this.scoreButton = new System.Windows.Forms.Button();
+            this.concludeButton = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // headerLabel
@@ -196,12 +197,29 @@
             this.scoreButton.UseVisualStyleBackColor = true;
             this.scoreButton.Click += new System.EventHandler(this.scoreButton_Click);
             // 
+            // concludeButton
+            // 
+            this.concludeButton.FlatAppearance.BorderColor = System.Drawing.Color.Silver;
+            this.concludeButton.FlatAppearance.MouseDownBackColor = System.Drawing.Color.FromArgb(((int)(((byte)(102)))), ((int)(((byte)(102)))), ((int)(((byte)(102)))));
+            this.concludeButton.FlatAppearance.MouseOverBackColor = System.Drawing.Color.FromArgb(((int)(((byte)(242)))), ((int)(((byte)(242)))), ((int)(((byte)(242)))));
+            this.concludeButton.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.concludeButton.Font = new System.Drawing.Font("Segoe UI Semibold", 15.75F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.concludeButton.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(51)))), ((int)(((byte)(153)))), ((int)(((byte)(255)))));
+            this.concludeButton.Location = new System.Drawing.Point(384, 91);
+            this.concludeButton.Name = "concludeButton";
+            this.concludeButton.Size = new System.Drawing.Size(204, 38);
+            this.concludeButton.TabIndex = 14;
+            this.concludeButton.Text = "Conclude Round";
+            this.concludeButton.UseVisualStyleBackColor = true;
+            this.concludeButton.Click += new System.EventHandler(this.concludeButton_Click);
+            // 
             // TournamentViewerForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(12F, 30F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.BackColor = System.Drawing.Color.White;
             this.ClientSize = new System.Drawing.Size(873, 611);
+            this.Controls.Add(this.concludeButton);
             this.Controls.Add(this.scoreButton);
             this.Controls.Add(this.versusLabel);
             this.Controls.Add(this.teamTwoScoreValue);
@@ -241,6 +259,7 @@
         private System.Windows.Forms.Label teamTwoName;
         private System.Windows.Forms.Label versusLabel;
         private System.Windows.Forms.Button scoreButton;
+        private System.Windows.Forms.Button concludeButton;
     }
 }
 

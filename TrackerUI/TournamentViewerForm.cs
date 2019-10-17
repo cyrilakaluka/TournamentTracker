@@ -15,13 +15,14 @@ namespace TrackerUI
     public partial class TournamentViewerForm : Form
     {
         private TournamentModel tournament;
-        List<int> rounds = new List<int>();
-        List<MatchupModel> selectedMatchups = new List<MatchupModel>();
+        List<MatchupModel> selectedMatchups;
         public TournamentViewerForm(TournamentModel tournament)
         {
             InitializeComponent();
 
             this.tournament = tournament;
+
+            selectedMatchups = tournament.Rounds.FirstOrDefault()?.Matchups;
 
             InitializeFormData();
         }
@@ -30,18 +31,18 @@ namespace TrackerUI
         {
             tournamentName.Text = tournament.TournamentName;
 
-            for (int i = 1; i <= tournament.Rounds.Count; i++)
-            {
-                rounds.Add(i);
-            }
-
             WireUpRoundsLists();
+
+            ShowFormElements();
+
+            LoadMatchupDetails();
         }
 
         private void WireUpRoundsLists()
         {
             roundDropDown.DataSource = null;
-            roundDropDown.DataSource = rounds;
+            roundDropDown.DataSource = tournament.Rounds;
+            roundDropDown.DisplayMember = "Number";
         }
 
         private void WireUpMatchupsLists()
@@ -53,18 +54,24 @@ namespace TrackerUI
 
         private void roundDropDown_SelectedIndexChanged(object sender, EventArgs e)
         {
-            LoadAllMatchups();
+            LoadRoundMatchups();
+
+            ShowFormElements();
+
+            LoadMatchupDetails();
         }
 
-        private void LoadAllMatchups()
+        private void LoadRoundMatchups()
         {
-            int round = (int) roundDropDown.SelectedItem;
+            if (roundDropDown.SelectedItem == null)
+                return;
 
-            selectedMatchups = tournament.Rounds[round - 1]
-                .Where(m => m.Winner == null || !unplayedOnlyCheckbox.Checked)
-                .ToList();
+            RoundModel round = (RoundModel)roundDropDown.SelectedItem;
+
+            selectedMatchups = round.Matchups.Where(m => m.Winner == null || !unplayedOnlyCheckbox.Checked).ToList();
 
             WireUpMatchupsLists();
+
             ShowMatchupsInfo();
         }
 
@@ -84,58 +91,57 @@ namespace TrackerUI
 
         private void matchupListBox_SelectedIndexChanged(object sender, EventArgs e)
         {
-            LoadSingleMatchup();
+            LoadMatchupDetails();
         }
 
-        private void LoadSingleMatchup()
+        private void LoadMatchupDetails()
         {
-            if (matchupListBox.SelectedItem == null)
+            if (matchupListBox.SelectedItem == null || roundDropDown.SelectedItem == null)
                 return;
+
+            RoundModel round = (RoundModel) roundDropDown.SelectedItem;
 
             MatchupModel m = (MatchupModel) matchupListBox.SelectedItem;
 
-            scoreButton.Enabled = false;
-
-            if (m.Entries[0].TeamCompeting != null)
+            if (round.Active.HasValue)
             {
                 teamOneName.Text = m.Entries[0].TeamCompeting.TeamName;
                 teamOneScoreValue.Text = m.Entries[0].Score.GetValueOrDefault().ToString();
-                teamOneScoreValue.Enabled = false;
 
                 teamTwoName.Text = "<bye>";
                 teamTwoScoreValue.Text = "0";
-                teamTwoScoreValue.Enabled = false;
-            }
-            else
-            {
-                teamOneName.Text = "Not Yet Set";
-                teamOneScoreValue.Text = "";
-                teamOneScoreValue.Enabled = false;
-            }
 
-            if (m.Entries.Count > 1)
-            {
-                if (m.Entries[1].TeamCompeting != null)
+                if (round.Active.Value == true)
+                {
+                    teamOneScoreValue.Enabled = false;
+                    teamTwoScoreValue.Enabled = false;
+                    teamOneScoreValue.BackColor = Color.LightGray;
+                    teamTwoScoreValue.BackColor = Color.LightGray;
+                    scoreButton.Enabled = false;
+                    scoreButton.BackColor = Color.LightGray; 
+                }
+
+                if (m.Entries.Count > 1)
                 {
                     teamTwoName.Text = m.Entries[1].TeamCompeting.TeamName;
                     teamTwoScoreValue.Text = m.Entries[1].Score.GetValueOrDefault().ToString();
-                    teamTwoScoreValue.Enabled = true;
 
-                    teamOneScoreValue.Enabled = true;
-                    scoreButton.Enabled = true;
-                }
-                else
-                {
-                    teamTwoName.Text = "Not Yet Set";
-                    teamTwoScoreValue.Text = "";
-                    teamTwoScoreValue.Enabled = false;
+                    if (round.Active.Value == true) 
+                    {
+                        teamOneScoreValue.Enabled = true;
+                        teamTwoScoreValue.Enabled = true;
+                        teamOneScoreValue.BackColor = Color.White;
+                        teamTwoScoreValue.BackColor = Color.White;
+                        scoreButton.Enabled = true;
+                        scoreButton.BackColor = Color.White; 
+                    }
                 }
             }
         }
 
         private void unplayedOnlyCheckbox_CheckedChanged(object sender, EventArgs e)
         {
-            LoadAllMatchups();
+            LoadRoundMatchups();
         }
 
         private void scoreButton_Click(object sender, EventArgs e)
@@ -147,11 +153,12 @@ namespace TrackerUI
             if (!string.IsNullOrEmpty(errorMessage))
             {
                 MessageBox.Show($"Input Error: {errorMessage}");
+                return;
             }
 
             try
             {
-                tournament.UpdateTournamentResults(matchup, (int)roundDropDown.SelectedItem);
+                matchup.UpdateMatchupResults(double.Parse(teamOneScoreValue.Text), double.Parse(teamTwoScoreValue.Text));
             }
             catch (Exception ex)
             {
@@ -159,7 +166,7 @@ namespace TrackerUI
                 return;
             }
 
-            LoadAllMatchups();
+            LoadMatchupDetails();
         }
 
         private string IsValidScoreData(MatchupModel matchup)
@@ -187,6 +194,98 @@ namespace TrackerUI
             }
 
             return output;
+        }
+
+        private void concludeButton_Click(object sender, EventArgs e)
+        {
+            RoundModel round = (RoundModel) roundDropDown.SelectedItem;
+
+            if (round == null) return;
+
+            try
+            {
+                tournament.UpdateTournamentRound(round);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Application error: {ex.Message}");
+                return;
+            }
+
+            RefreshForm();
+        }
+
+        private void ShowFormElements()
+        {
+            RoundModel round = (RoundModel) roundDropDown.SelectedItem;
+
+            if(round == null) return;
+
+            if (round.Active.HasValue)
+            {
+                if (!round.Active.Value)
+                {
+                    concludeButton.Enabled = false;
+                    concludeButton.BackColor = Color.LightGray;
+                    concludeButton.Text = "Completed";
+                    scoreButton.Enabled = false;
+                    scoreButton.BackColor = Color.LightGray;
+                    scoreButton.Visible = true;
+                    teamOneName.Visible = true;
+                    teamOneScoreLabel.Visible = true;
+                    teamOneScoreValue.Enabled = false;
+                    teamOneScoreValue.BackColor = Color.LightGray;
+                    teamTwoName.Visible = true;
+                    teamTwoScoreLabel.Visible = true;
+                    teamTwoScoreValue.Enabled = false;
+                    teamTwoScoreValue.BackColor = Color.LightGray;
+                }
+                else
+                {
+                    concludeButton.Enabled = true;
+                    concludeButton.BackColor = Color.White;
+                    concludeButton.Text = "End Round";
+                    scoreButton.Enabled = true;
+                    scoreButton.BackColor = Color.White;
+                    scoreButton.Visible = true;
+                    teamOneName.Visible = true;
+                    teamOneScoreLabel.Visible = true;
+                    teamOneScoreValue.Enabled = true;
+                    teamOneScoreValue.BackColor = Color.White;
+                    teamTwoName.Visible = true;
+                    teamTwoScoreLabel.Visible = true;
+                    teamTwoScoreValue.Enabled = true;
+                    teamTwoScoreValue.BackColor = Color.White;
+
+                    if (tournament.Rounds.Count == round.Number) // final round
+                    {
+                        concludeButton.Text = "End Tournament";
+                    }
+                }
+            }
+            else
+            {
+                concludeButton.Enabled = false;
+                concludeButton.BackColor = Color.LightGray;
+                concludeButton.Text = "Not Yet Active";
+                teamOneName.Visible = false;
+                teamOneScoreValue.Visible = false;
+                teamOneScoreLabel.Visible = false;
+                teamTwoName.Visible = false;
+                teamTwoScoreValue.Visible = false;
+                teamTwoScoreLabel.Visible = false;
+                versusLabel.Visible = false;
+                scoreButton.Visible = false;
+            }
+        }
+
+        private void RefreshForm()
+        {
+            LoadRoundMatchups();
+
+            ShowFormElements();
+
+            LoadMatchupDetails();
         }
     }
 }
