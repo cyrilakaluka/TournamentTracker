@@ -15,12 +15,19 @@ namespace TrackerUI
     public partial class TournamentViewerForm : Form
     {
         private TournamentModel tournament;
-        List<MatchupModel> selectedMatchups;
+        private List<MatchupModel> selectedMatchups;
         public TournamentViewerForm(TournamentModel tournament)
         {
             InitializeComponent();
 
+            if (tournament == null)
+            {
+               // TODO - Handle cases when tournament is null
+            }
+
             this.tournament = tournament;
+
+            tournament.TournamentCompleted += OnTournamentCompleted;
 
             selectedMatchups = tournament.Rounds.FirstOrDefault()?.Matchups;
 
@@ -286,6 +293,12 @@ namespace TrackerUI
             ShowFormElements();
 
             LoadMatchupDetails();
+        }
+
+        private void OnTournamentCompleted(object source, DateTime dateTime)
+        {
+            MessageBox.Show("This tournament has been completed");
+            this.Close();
         }
     }
 }

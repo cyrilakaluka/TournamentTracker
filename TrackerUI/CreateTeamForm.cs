@@ -24,17 +24,8 @@ namespace TrackerUI
         public CreateTeamForm()
         {
             InitializeComponent();
-            //CreateSampleData();
+
             WireUpList();
-        }
-
-        private void CreateSampleData()
-        {
-            availableTeamMembers.Add(new PersonModel{ FirstName = "Sarah", LastName = "George"});
-            availableTeamMembers.Add(new PersonModel { FirstName = "Jerry", LastName = "Boston"});
-
-            selectedTeamMembers.Add(new PersonModel {FirstName = "Tim", LastName = "Jackson"});
-            selectedTeamMembers.Add(new PersonModel { FirstName = "Sten", LastName = "Leima"});
         }
 
         private void WireUpList()

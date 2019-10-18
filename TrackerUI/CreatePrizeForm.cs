@@ -48,7 +48,6 @@ namespace TrackerUI
             }
         }
 
-
         private bool ValidateForm()
         {
             bool output = true;

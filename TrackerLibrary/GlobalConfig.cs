@@ -34,5 +34,10 @@ namespace TrackerLibrary
         {
             return ConfigurationManager.ConnectionStrings[name].ConnectionString;
         }
+
+        public static string LookupAppConfigKey(string key)
+        {
+            return ConfigurationManager.AppSettings[key];
+        }
     }
 }

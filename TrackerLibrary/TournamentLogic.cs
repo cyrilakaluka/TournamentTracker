@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml;
 using TrackerLibrary.Models;
 
 namespace TrackerLibrary
@@ -44,25 +45,6 @@ namespace TrackerLibrary
                 return teams.OrderBy(x => Guid.NewGuid()).ToList();
             } 
             #endregion
-        }
-
-        public static void UpdateMatchupResults(this MatchupModel matchup, double scoreTeamOne, double scoreTeamTwo)
-        {
-            if (matchup.Entries.Count == 1)
-            {
-                return;
-            }
-
-            bool parseValid = bool.TryParse(ConfigurationManager.AppSettings["greaterWins"], out bool greaterWins);
-
-            if (!parseValid)
-            {
-                greaterWins = true;
-            }
-
-            UpdateWinner(matchup, greaterWins, scoreTeamOne, scoreTeamTwo);
-
-            GlobalConfig.Connection.UpdateMatchup(matchup);
         }
 
         private static void CreateOtherRounds(TournamentModel model, int numRounds)
@@ -121,6 +103,25 @@ namespace TrackerLibrary
             return output;
         }
 
+        public static void UpdateMatchupResults(this MatchupModel matchup, double scoreTeamOne, double scoreTeamTwo)
+        {
+            if (matchup.Entries.Count == 1)
+            {
+                return;
+            }
+
+            bool parseValid = bool.TryParse(ConfigurationManager.AppSettings["greaterWins"], out bool greaterWins);
+
+            if (!parseValid)
+            {
+                greaterWins = true;
+            }
+
+            UpdateWinner(matchup, greaterWins, scoreTeamOne, scoreTeamTwo);
+
+            GlobalConfig.Connection.UpdateMatchup(matchup);
+        }
+
         private static void UpdateWinner(MatchupModel matchup, bool greaterWins, double scoreTeamOne, double scoreTeamTwo)
         {
             if (greaterWins)
@@ -171,9 +172,9 @@ namespace TrackerLibrary
 
             GlobalConfig.Connection.UpdateRound(round);
 
-            bool finalRound = tournament.Rounds.Count == round.Number;
+            bool isFinalRound = tournament.Rounds.Count == round.Number;
 
-            if (!finalRound)
+            if (!isFinalRound)
             {
                 RoundModel nextRound = tournament.Rounds.First(r => r.Number == round.Number + 1);
 
@@ -186,7 +187,121 @@ namespace TrackerLibrary
                 }));
 
                 GlobalConfig.Connection.UpdateRound(nextRound);
+
+                tournament.NotifyEnteredTeams(nextRound);
             }
+            else
+            {
+                tournament.CompleteTournament();
+                tournament.NotifyTournamentComplete();
+            }
+        }
+
+        private static void CompleteTournament(this TournamentModel tournament)
+        {
+            GlobalConfig.Connection.DeactivateTournament(tournament);
+            MatchupModel finalMatchup = tournament.Rounds.Last().Matchups.First();
+            TeamModel winner = finalMatchup.Winner;
+            TeamModel runnerUp = finalMatchup.Entries.First(e => e.TeamCompeting != winner).TeamCompeting;
+
+            decimal winnerPrize = 0;
+            decimal runnerUpPrize = 0;
+
+            if (tournament.Prizes.Count > 0)
+            {
+                decimal totalIncome = tournament.EnteredTeams.Count * tournament.EntryFee;
+
+                PrizeModel firstPlacePrize = tournament.Prizes.FirstOrDefault(p => p.PlaceNumber == 1);
+                PrizeModel secondPlacePrize = tournament.Prizes.FirstOrDefault(p => p.PlaceNumber == 2);
+
+                winnerPrize = firstPlacePrize?.CalculatePrizePayout(totalIncome) ?? 0;
+                runnerUpPrize = secondPlacePrize?.CalculatePrizePayout(totalIncome) ?? 0;
+            }
+
+            string subject = $"In {tournament.TournamentName}, {winner.TeamName} has won!";
+            StringBuilder body = new StringBuilder();
+
+            body.AppendLine("<h1>We have a Winner!</h1>");
+            body.AppendLine("<p>Congratulations to out winner on a great tournament.</p>");
+            body.AppendLine("<br />");
+
+            if (winnerPrize > 0)
+            {
+                body.AppendLine($"<p>{winner.TeamName} will receive ${winnerPrize}</p>");
+            }
+
+            if (runnerUpPrize > 0)
+            {
+                body.AppendLine($"<p>{runnerUp.TeamName} will receive {runnerUpPrize} as runner up</p>");
+            }
+
+            body.AppendLine("<p>Thanks to everyone for participating!</p>");
+            body.AppendLine("<p>~Tournament Tracker</p>");
+
+            List<string> bcc = new List<string>();
+            tournament.EnteredTeams.ForEach(et => et.TeamMembers.Where(mb => !string.IsNullOrEmpty(mb.EmailAddress)).ToList().ForEach(p => bcc.Add(p.EmailAddress)));
+
+            EmailLogic.SendEmail(new List<string>(), bcc, subject, body.ToString());
+        }
+
+        private static decimal CalculatePrizePayout(this PrizeModel prize, decimal totalIncome)
+        {
+            decimal output = 0;
+            if (prize.PrizeAmount > 0)
+            {
+                output = prize.PrizeAmount;
+            }
+            else
+            {
+                output = decimal.Multiply(totalIncome, Convert.ToDecimal(prize.PrizePercentage / 100));
+            }
+
+            return output;
+        }
+
+        public static void NotifyEnteredTeams(this TournamentModel tournament, RoundModel activeRound)
+        {
+            activeRound.Matchups.ForEach(m => m.NotifyMatchupEntries(tournament.TournamentName));
+        }
+
+        private static void NotifyMatchupEntries(this MatchupModel matchup, string tournamentName)
+        {
+            matchup.Entries.ForEach(e => e.TeamCompeting.TeamMembers
+                .ForEach(mb => mb.NotifyPersonToMatchup(
+                    tournamentName, 
+                    matchup.MatchupRound, 
+                    e.TeamCompeting, 
+                    matchup.Entries.FirstOrDefault(me => me.TeamCompeting != e.TeamCompeting)?.TeamCompeting)));
+        }
+
+        private static void NotifyPersonToMatchup(this PersonModel person, string tournamentName, int round, TeamModel team, TeamModel competitor)
+        {
+            if (string.IsNullOrEmpty(person.EmailAddress))
+            {
+                return;
+            }
+
+            string toAddress = person.EmailAddress;
+            string subject = "";
+            StringBuilder body = new StringBuilder();
+
+            if (competitor != null)
+            {
+                subject = $"You have a new matchup with {competitor.TeamName}";
+                body.AppendLine("<h1>You have a new matchup</h1>");
+                body.Append("<strong>Competitor: </strong>");
+                body.AppendLine(competitor.TeamName);
+                body.AppendLine("\n\n");
+                body.AppendLine("Have a great time!");
+            }
+            else
+            {
+                subject = "You have a bye week for this round";
+                body.AppendLine("Enjoy your round off");
+            }
+            body.AppendLine("~Tournament Tracker");
+
+            EmailLogic.SendEmail(toAddress, subject, body.ToString());
         }
     }
 }

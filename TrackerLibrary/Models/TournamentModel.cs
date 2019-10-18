@@ -10,6 +10,8 @@ namespace TrackerLibrary.Models
     /// </summary>
     public class TournamentModel
     {
+        public event EventHandler<DateTime> TournamentCompleted;
+
         /// <summary>
         /// Unique Identification for each model
         /// </summary>
@@ -39,5 +41,10 @@ namespace TrackerLibrary.Models
         /// List of rounds that make up the tournament
         /// </summary>
         public List<RoundModel> Rounds { get; set; } = new List<RoundModel>();
+
+        public void NotifyTournamentComplete()
+        {
+            TournamentCompleted?.Invoke(this, DateTime.Now);
+        }
     }
 }

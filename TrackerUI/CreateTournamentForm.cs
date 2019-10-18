@@ -123,6 +123,8 @@ namespace TrackerUI
 
                 GlobalConfig.Connection.CreateTournament(model);
 
+                model.NotifyEnteredTeams(model.Rounds.First());
+
                 TournamentViewerForm form = new TournamentViewerForm(model);
                 form.Show();
                 this.Close();

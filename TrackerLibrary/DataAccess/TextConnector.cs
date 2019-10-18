@@ -107,6 +107,11 @@ namespace TrackerLibrary.DataAccess
             model.UpdateMatchupEntryToFile();
         }
 
+        public void DeactivateTournament(TournamentModel model)
+        {
+            model.RemoveFromTournamentsFile();
+        }
+
         public List<PersonModel> GetPerson_All()
         {
             return GlobalConfig.PersonsFile.GetFullFilePath().LoadFile().ConvertToPersonModels();

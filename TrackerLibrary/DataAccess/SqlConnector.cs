@@ -199,6 +199,17 @@ namespace TrackerLibrary.DataAccess
             }
         }
 
+        public void DeactivateTournament(TournamentModel model)
+        {
+            using (IDbConnection dbConnection = new System.Data.SqlClient.SqlConnection(GlobalConfig.GetConnectionString(ConnectionDatabase)))
+            {
+                var p = new DynamicParameters();
+                p.Add("@id", model.Id);
+
+                dbConnection.Execute("dbo.spTournament_Deactivate", p, commandType: CommandType.StoredProcedure);
+            }
+        }
+
         public void UpdateRound(RoundModel model)
         {
             using (IDbConnection dbConnection = new System.Data.SqlClient.SqlConnection(GlobalConfig.GetConnectionString(ConnectionDatabase)))
